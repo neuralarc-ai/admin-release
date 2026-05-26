@@ -28,8 +28,8 @@ function ReleasePopupsAdmin() {
   const router = useRouter();
   const toast = useToast();
 
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
-  const [offset, setOffset] = useState(0);
+  const [filters, setFiltersState] = useState<FilterState>(DEFAULT_FILTERS);
+  const [offset, setOffsetState] = useState(0);
   const [reloadTick, setReloadTick] = useState(0);
   const [data, setData] = useState<ListResponse>({ items: [], total: 0 });
   const [loading, setLoading] = useState(true);
@@ -38,8 +38,6 @@ function ReleasePopupsAdmin() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     store
       .list({
         is_active:
@@ -56,6 +54,7 @@ function ReleasePopupsAdmin() {
       .then((res) => {
         if (cancelled) return;
         setData(res);
+        setError(null);
         setLoading(false);
       })
       .catch((err) => {
@@ -68,11 +67,25 @@ function ReleasePopupsAdmin() {
     };
   }, [filters, offset, reloadTick]);
 
-  useEffect(() => {
-    setOffset(0);
-  }, [filters]);
+  const handleFiltersChange = useCallback((next: FilterState) => {
+    setLoading(true);
+    setError(null);
+    setOffsetState(0);
+    setFiltersState(next);
+  }, []);
 
-  const reload = useCallback(() => setReloadTick((n) => n + 1), []);
+  const handlePageChange = useCallback((next: number) => {
+    setLoading(true);
+    setError(null);
+    setOffsetState(next);
+  }, []);
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    setReloadTick((n) => n + 1);
+  }, []);
+
   const filtersDirty =
     filters.active !== DEFAULT_FILTERS.active ||
     filters.activeNow !== DEFAULT_FILTERS.activeNow ||
@@ -127,7 +140,7 @@ function ReleasePopupsAdmin() {
 
         <FilterBar
           value={filters}
-          onChange={setFilters}
+          onChange={handleFiltersChange}
           resultCount={data.total}
         />
 
@@ -155,11 +168,11 @@ function ReleasePopupsAdmin() {
               total={data.total}
               offset={offset}
               limit={PAGE_SIZE}
-              onPageChange={setOffset}
+              onPageChange={handlePageChange}
               onEdit={handleEdit}
               onDisable={handleDisable}
               onEnable={handleEnable}
-              onClearFilters={() => setFilters(DEFAULT_FILTERS)}
+              onClearFilters={() => handleFiltersChange(DEFAULT_FILTERS)}
               filtersDirty={filtersDirty}
             />
           )}

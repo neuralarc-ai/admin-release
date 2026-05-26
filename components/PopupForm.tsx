@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Field } from "./ui/Field";
 import { Input } from "./ui/Input";
 import { Textarea } from "./ui/Textarea";
@@ -124,12 +124,6 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [showAllErrors, setShowAllErrors] = useState(false);
-
-  useEffect(() => {
-    setForm(initial ? fromPopup(initial) : emptyForm());
-    setErrors({});
-    setShowAllErrors(false);
-  }, [initial]);
 
   const payload = useMemo(() => toCreatePayload(form), [form]);
   const liveErrors = useMemo(() => validatePopup(payload).fieldErrors, [payload]);

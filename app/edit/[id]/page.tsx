@@ -6,5 +6,5 @@ export default async function EditPopupPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <PopupFormHost mode="edit" id={id} />;
+  return <PopupFormHost key={id} mode="edit" id={id} />;
 }

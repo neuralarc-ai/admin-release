@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { PopupForm } from "./PopupForm";
 import { ToastProvider, useToast } from "./Toast";
@@ -36,13 +36,12 @@ function PopupFormHostInner({ mode, id }: PopupFormHostProps) {
   useEffect(() => {
     if (mode !== "edit" || !id) return;
     let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
     store
       .get(id)
       .then((row) => {
         if (cancelled) return;
         setInitial(row);
+        setLoadError(null);
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -60,6 +59,12 @@ function PopupFormHostInner({ mode, id }: PopupFormHostProps) {
       cancelled = true;
     };
   }, [mode, id, loadTick, router, toast]);
+
+  const retry = useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
+    setLoadTick((n) => n + 1);
+  }, []);
 
   async function handleSubmit(payload: ReleasePopupCreate) {
     setSaveError(null);
@@ -115,10 +120,7 @@ function PopupFormHostInner({ mode, id }: PopupFormHostProps) {
         </div>
 
         {loadError ? (
-          <ApiErrorBanner
-            error={loadError}
-            onRetry={() => setLoadTick((n) => n + 1)}
-          />
+          <ApiErrorBanner error={loadError} onRetry={retry} />
         ) : null}
 
         {saveError ? (
