@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Field } from "./ui/Field";
 import { Input } from "./ui/Input";
 import { Textarea } from "./ui/Textarea";
@@ -104,6 +104,8 @@ const TIER_LABELS: Record<PlanTier, string> = {
   max: "Max",
 };
 
+const DRAFT_KEY = "popup-new-draft";
+
 const POSITION_OPTIONS: { value: ImagePosition; label: string; Icon: typeof PanelTop }[] = [
   { value: "top", label: "Top", Icon: PanelTop },
   { value: "left", label: "Left", Icon: PanelLeft },
@@ -124,6 +126,27 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [showAllErrors, setShowAllErrors] = useState(false);
+  // true for edit (no draft needed), false for create until sessionStorage is read
+  const [draftReady, setDraftReady] = useState(!!initial);
+
+  // Restore draft from sessionStorage after mount (create mode only)
+  useEffect(() => {
+    if (initial) return;
+    try {
+      const saved = sessionStorage.getItem(DRAFT_KEY);
+      if (saved) setForm(JSON.parse(saved) as FormState);
+    } catch {}
+    setDraftReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist draft to sessionStorage on every change (create mode only, after restore)
+  useEffect(() => {
+    if (!draftReady || initial) return;
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(form));
+    } catch {}
+  }, [form, draftReady, initial]);
 
   const payload = useMemo(() => toCreatePayload(form), [form]);
   const liveErrors = useMemo(() => validatePopup(payload).fieldErrors, [payload]);
@@ -141,9 +164,19 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
     setSubmitting(true);
     try {
       await onSubmit(payload);
+      if (!initial) {
+        try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
+      }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleCancel() {
+    if (!initial) {
+      try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
+    }
+    onCancel();
   }
 
   function togglePlanTier(t: PlanTier) {
@@ -416,7 +449,7 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
       </Section>
 
       <div className="flex items-center justify-end gap-2 border-t border-border pt-5">
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
+        <Button type="button" variant="ghost" onClick={handleCancel} disabled={submitting}>
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={submitting}>

@@ -35,6 +35,7 @@ function ReleasePopupsAdmin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [pendingDisable, setPendingDisable] = useState<ReleasePopup | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ReleasePopup | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,6 +132,23 @@ function ReleasePopupsAdmin() {
     [toast, reload],
   );
 
+  const handleDelete = useCallback(
+    (row: ReleasePopup) => setPendingDelete(row),
+    [],
+  );
+  const confirmDelete = useCallback(async () => {
+    if (!pendingDelete) return;
+    const target = pendingDelete;
+    setPendingDelete(null);
+    try {
+      await store.hardDelete(target.id);
+      toast.push("success", `"${target.title}" permanently deleted.`);
+      reload();
+    } catch (err) {
+      handleMutationError(err, toast.push);
+    }
+  }, [pendingDelete, toast, reload]);
+
   return (
     <div className="min-h-screen bg-bg text-fg">
       <main className="mx-auto max-w-7xl px-6 pt-20 pb-16 flex flex-col gap-12">
@@ -172,6 +190,7 @@ function ReleasePopupsAdmin() {
               onEdit={handleEdit}
               onDisable={handleDisable}
               onEnable={handleEnable}
+              onDelete={handleDelete}
               onClearFilters={() => handleFiltersChange(DEFAULT_FILTERS)}
               filtersDirty={filtersDirty}
             />
@@ -192,6 +211,21 @@ function ReleasePopupsAdmin() {
         destructive
         onConfirm={confirmDisable}
         onCancel={() => setPendingDisable(null)}
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Permanently delete this popup?"
+        description={
+          pendingDelete
+            ? `"${pendingDelete.title}" will be permanently removed from the database. This cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete permanently"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
       />
     </div>
   );

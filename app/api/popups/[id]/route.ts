@@ -35,15 +35,14 @@ export async function PATCH(req: Request, { params }: Ctx) {
   );
 }
 
-export async function DELETE(_req: Request, { params }: Ctx) {
+export async function DELETE(req: Request, { params }: Ctx) {
   const { id } = await params;
   const cfg = readBackendConfig();
   if (!cfg.ok) return missingConfig(cfg.missing);
-  return proxy(
-    `${cfg.config.baseUrl}${BACKEND_PATH}/${encodeURIComponent(id)}`,
-    { method: "DELETE" },
-    cfg.config.apiKey,
-  );
+  const { searchParams } = new URL(req.url);
+  const permanent = searchParams.get("permanent") === "true";
+  const backendUrl = `${cfg.config.baseUrl}${BACKEND_PATH}/${encodeURIComponent(id)}${permanent ? "?permanent=true" : ""}`;
+  return proxy(backendUrl, { method: "DELETE" }, cfg.config.apiKey);
 }
 
 function missingConfig(missing: string[]) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, EyeOff, Eye, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
+import { Pencil, EyeOff, Eye, Trash2, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
 import { Button } from "./ui/Button";
 import { StatusBadge } from "./StatusBadge";
 import { formatTableDate } from "@/lib/formatDate";
@@ -23,6 +23,7 @@ export interface PopupListProps {
   onEdit: (row: ReleasePopup) => void;
   onDisable: (row: ReleasePopup) => void;
   onEnable: (row: ReleasePopup) => void;
+  onDelete: (row: ReleasePopup) => void;
   onClearFilters: () => void;
   filtersDirty: boolean;
 }
@@ -36,6 +37,7 @@ export function PopupList({
   onEdit,
   onDisable,
   onEnable,
+  onDelete,
   onClearFilters,
   filtersDirty,
 }: PopupListProps) {
@@ -73,6 +75,7 @@ export function PopupList({
                 onEdit={() => onEdit(row)}
                 onDisable={() => onDisable(row)}
                 onEnable={() => onEnable(row)}
+                onDelete={() => onDelete(row)}
               />
             ))}
           </tbody>
@@ -123,11 +126,13 @@ function Row({
   onEdit,
   onDisable,
   onEnable,
+  onDelete,
 }: {
   row: ReleasePopup;
   onEdit: () => void;
   onDisable: () => void;
   onEnable: () => void;
+  onDelete: () => void;
 }) {
   return (
     <tr className="border-b border-border last:border-b-0 hover:bg-surface-hover/40 transition-colors group">
@@ -188,6 +193,15 @@ function Row({
               Enable
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            leadingIcon={<Trash2 size={13} />}
+            className="text-danger hover:text-danger"
+          >
+            Delete
+          </Button>
         </div>
       </td>
     </tr>

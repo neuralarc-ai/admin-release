@@ -36,8 +36,7 @@ export function validatePopup(input: ReleasePopupCreate): ValidationResult {
 
   // image_url
   if (input.image_url) {
-    if (input.image_url.length > 2048) fieldErrors.image_url = "Max 2048 characters.";
-    else if (!isUrl(input.image_url))
+    if (!isUrl(input.image_url))
       fieldErrors.image_url = "Must be a valid http(s) URL.";
   }
 
