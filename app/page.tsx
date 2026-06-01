@@ -34,7 +34,6 @@ function ReleasePopupsAdmin() {
   const [data, setData] = useState<ListResponse>({ items: [], total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
-  const [pendingDisable, setPendingDisable] = useState<ReleasePopup | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ReleasePopup | null>(null);
 
   useEffect(() => {
@@ -99,39 +98,6 @@ function ReleasePopupsAdmin() {
     [router],
   );
 
-  const handleDisable = useCallback(
-    (row: ReleasePopup) => setPendingDisable(row),
-    [],
-  );
-  const confirmDisable = useCallback(async () => {
-    if (!pendingDisable) return;
-    const target = pendingDisable;
-    setPendingDisable(null);
-    try {
-      await store.softDelete(target.id);
-      toast.push(
-        "success",
-        `Disabled "${target.title}". Switch Status to "All" or "Inactive only" to view it.`,
-      );
-      reload();
-    } catch (err) {
-      handleMutationError(err, toast.push);
-    }
-  }, [pendingDisable, toast, reload]);
-
-  const handleEnable = useCallback(
-    async (row: ReleasePopup) => {
-      try {
-        await store.update(row.id, { is_active: true });
-        toast.push("success", `"${row.title}" enabled.`);
-        reload();
-      } catch (err) {
-        handleMutationError(err, toast.push);
-      }
-    },
-    [toast, reload],
-  );
-
   const handleDelete = useCallback(
     (row: ReleasePopup) => setPendingDelete(row),
     [],
@@ -188,8 +154,6 @@ function ReleasePopupsAdmin() {
               limit={PAGE_SIZE}
               onPageChange={handlePageChange}
               onEdit={handleEdit}
-              onDisable={handleDisable}
-              onEnable={handleEnable}
               onDelete={handleDelete}
               onClearFilters={() => handleFiltersChange(DEFAULT_FILTERS)}
               filtersDirty={filtersDirty}
@@ -197,21 +161,6 @@ function ReleasePopupsAdmin() {
           )}
         </section>
       </main>
-
-      <ConfirmDialog
-        open={!!pendingDisable}
-        title="Disable this popup?"
-        description={
-          pendingDisable
-            ? `"${pendingDisable.title}" will stop showing to users. It's hidden from this list by default — switch Status to "All" or "Inactive only" to find it again.`
-            : undefined
-        }
-        confirmLabel="Disable"
-        cancelLabel="Cancel"
-        destructive
-        onConfirm={confirmDisable}
-        onCancel={() => setPendingDisable(null)}
-      />
 
       <ConfirmDialog
         open={!!pendingDelete}

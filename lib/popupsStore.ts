@@ -96,18 +96,12 @@ export async function update(
   return hydrateImagePosition(row);
 }
 
-export async function softDelete(id: string): Promise<ReleasePopup> {
+export async function hardDelete(id: string): Promise<ReleasePopup> {
   const row = await request<ReleasePopup>(`${PROXY_BASE}/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
-  return hydrateImagePosition(row);
-}
-
-export async function hardDelete(id: string): Promise<void> {
-  await request<void>(`${PROXY_BASE}/${encodeURIComponent(id)}?permanent=true`, {
-    method: "DELETE",
-  });
   removeImagePosition(id);
+  return hydrateImagePosition(row);
 }
 
 export function forgetImagePosition(id: string): void {

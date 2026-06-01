@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, EyeOff, Eye, Trash2, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
 import { Button } from "./ui/Button";
 import { StatusBadge } from "./StatusBadge";
 import { formatTableDate } from "@/lib/formatDate";
@@ -21,8 +21,6 @@ export interface PopupListProps {
   limit: number;
   onPageChange: (offset: number) => void;
   onEdit: (row: ReleasePopup) => void;
-  onDisable: (row: ReleasePopup) => void;
-  onEnable: (row: ReleasePopup) => void;
   onDelete: (row: ReleasePopup) => void;
   onClearFilters: () => void;
   filtersDirty: boolean;
@@ -35,8 +33,6 @@ export function PopupList({
   limit,
   onPageChange,
   onEdit,
-  onDisable,
-  onEnable,
   onDelete,
   onClearFilters,
   filtersDirty,
@@ -73,8 +69,6 @@ export function PopupList({
                 key={row.id}
                 row={row}
                 onEdit={() => onEdit(row)}
-                onDisable={() => onDisable(row)}
-                onEnable={() => onEnable(row)}
                 onDelete={() => onDelete(row)}
               />
             ))}
@@ -124,14 +118,10 @@ function Th({ children, className = "" }: { children: React.ReactNode; className
 function Row({
   row,
   onEdit,
-  onDisable,
-  onEnable,
   onDelete,
 }: {
   row: ReleasePopup;
   onEdit: () => void;
-  onDisable: () => void;
-  onEnable: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -174,25 +164,6 @@ function Row({
           >
             Edit
           </Button>
-          {row.is_active ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={onDisable}
-              leadingIcon={<EyeOff size={13} />}
-            >
-              Disable
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={onEnable}
-              leadingIcon={<Eye size={13} />}
-            >
-              Enable
-            </Button>
-          )}
           <Button
             size="sm"
             variant="ghost"

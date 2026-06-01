@@ -24,8 +24,11 @@ export function PopupPreview({
   const hasImage = !!imageUrl.trim();
   const hasCta = !!ctaLabel.trim() && !!ctaUrl.trim();
 
+  // Mirror real ReleasePopup: top+image → portrait card (max-w-md), side → wide (max-w-3xl)
+  const widthClass = hasImage && imagePosition === "top" ? "max-w-md" : "max-w-3xl";
+
   const textBlock = (
-    <div className="p-8 flex flex-col gap-4 min-h-[320px]">
+    <div className={`p-8 flex flex-col gap-4 overflow-y-auto min-w-0 ${!hasImage ? "min-h-[280px]" : ""}`}>
       <h3
         className={`text-2xl font-semibold tracking-tight ${
           title ? "text-fg" : "text-fg-subtle italic"
@@ -33,7 +36,7 @@ export function PopupPreview({
       >
         {title || "Untitled popup"}
       </h3>
-      <div className="text-sm text-fg-muted">
+      <div className="text-sm text-fg-muted leading-relaxed">
         <MarkdownPreview source={body} />
       </div>
       {hasCta ? (
@@ -49,23 +52,52 @@ export function PopupPreview({
     </div>
   );
 
-  const imageBlockSide = (
-    <div className="relative hidden md:block bg-surface-2 min-h-[320px]">
+  // aspect-video matches the real ReleasePopup's top image pane exactly
+  const imageBlockTop = (
+    <div className="relative w-full aspect-video bg-surface-2 shrink-0 overflow-hidden">
       <FillImage url={imageUrl} />
     </div>
   );
 
-  const imageBlockTop = (
-    <div className="relative bg-surface-2 h-56 w-full overflow-hidden">
+  // Side image pane stretches to the grid row height (set by md:min-h below)
+  const imageBlockSide = (
+    <div className="relative hidden md:block bg-surface-2">
       <FillImage url={imageUrl} />
     </div>
   );
+
+  let layout: React.ReactNode;
+  if (!hasImage) {
+    layout = textBlock;
+  } else if (imagePosition === "top") {
+    // Portrait card: image stacked above content, same as real modal
+    layout = (
+      <div className="flex flex-col max-h-[85vh] overflow-y-auto">
+        {imageBlockTop}
+        {textBlock}
+      </div>
+    );
+  } else if (imagePosition === "right") {
+    layout = (
+      <div className="grid md:grid-cols-2 md:min-h-112 md:max-h-[80vh]">
+        {textBlock}
+        {imageBlockSide}
+      </div>
+    );
+  } else {
+    layout = (
+      <div className="grid md:grid-cols-2 md:min-h-112 md:max-h-[80vh]">
+        {imageBlockSide}
+        {textBlock}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl bg-bg/40 p-6 sm:p-10 flex items-start justify-center border border-border/60">
       <div
         role="presentation"
-        className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+        className={`relative w-full ${widthClass} overflow-hidden rounded-3xl border border-border bg-surface shadow-2xl`}
       >
         <button
           type="button"
@@ -76,24 +108,7 @@ export function PopupPreview({
           <X size={14} />
         </button>
 
-        {!hasImage ? (
-          textBlock
-        ) : imagePosition === "top" ? (
-          <>
-            {imageBlockTop}
-            {textBlock}
-          </>
-        ) : imagePosition === "left" ? (
-          <div className="grid md:grid-cols-2">
-            {imageBlockSide}
-            {textBlock}
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2">
-            {textBlock}
-            {imageBlockSide}
-          </div>
-        )}
+        {layout}
       </div>
     </div>
   );

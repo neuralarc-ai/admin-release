@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Field } from "./ui/Field";
 import { Input } from "./ui/Input";
 import { Textarea } from "./ui/Textarea";
@@ -18,12 +18,15 @@ import {
 } from "@/lib/types";
 import { fromDatetimeLocalValue, toDatetimeLocalValue } from "@/lib/formatDate";
 import { validatePopup, type FieldErrors } from "@/lib/validation";
-import { AlertCircle, PanelTop, PanelLeft, PanelRight } from "lucide-react";
+import { AlertCircle, PanelTop, PanelLeft, PanelRight, X } from "lucide-react";
+import { ImageUploadInput, deleteImage } from "./ImageUploadInput";
 
 interface FormState {
   title: string;
   body: string;
-  image_url: string;
+  image_url: string;         // http(s)://, blob:, or ''
+  _stagedFile: File | null;  // file chosen but not yet uploaded; cleared on save/cancel/swap
+  _initialImageUrl: string;  // image_url as loaded from DB — used to detect managed-image swaps
   image_position: ImagePosition;
   cta_label: string;
   cta_url: string;
@@ -42,6 +45,8 @@ function emptyForm(): FormState {
     title: "",
     body: "",
     image_url: "",
+    _stagedFile: null,
+    _initialImageUrl: "",
     image_position: "left",
     cta_label: "",
     cta_url: "",
@@ -59,6 +64,8 @@ function fromPopup(p: ReleasePopup): FormState {
     title: p.title,
     body: p.body,
     image_url: p.image_url ?? "",
+    _stagedFile: null,
+    _initialImageUrl: p.image_url ?? "",
     image_position: p.image_position ?? "left",
     cta_label: p.cta_label ?? "",
     cta_url: p.cta_url ?? "",
@@ -72,10 +79,15 @@ function fromPopup(p: ReleasePopup): FormState {
 }
 
 function toCreatePayload(form: FormState): ReleasePopupCreate {
+  // blob: URLs are ephemeral — treat as null for validation and backend payload.
+  // The real S3 URL is substituted in handleSubmit after upload.
+  const imageUrl = form.image_url.startsWith("blob:")
+    ? null
+    : form.image_url.trim() || null;
   return {
     title: form.title.trim(),
     body: form.body,
-    image_url: form.image_url.trim() ? form.image_url.trim() : null,
+    image_url: imageUrl,
     image_position: form.image_position,
     cta_label: form.cta_label.trim() ? form.cta_label.trim() : null,
     cta_url: form.cta_url.trim() ? form.cta_url.trim() : null,
@@ -129,12 +141,38 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
   // true for edit (no draft needed), false for create until sessionStorage is read
   const [draftReady, setDraftReady] = useState(!!initial);
 
+  // Keep a ref to form so the unmount cleanup can access the latest image_url
+  const formRef = useRef(form);
+  useEffect(() => {
+    formRef.current = form;
+  });
+
+  // Revoke any staged blob URL on unmount (covers navigate-away without Cancel)
+  useEffect(() => {
+    return () => {
+      if (formRef.current.image_url.startsWith("blob:")) {
+        URL.revokeObjectURL(formRef.current.image_url);
+      }
+    };
+  }, []);
+
   // Restore draft from sessionStorage after mount (create mode only)
   useEffect(() => {
     if (initial) return;
     try {
       const saved = sessionStorage.getItem(DRAFT_KEY);
-      if (saved) setForm(JSON.parse(saved) as FormState);
+      if (saved) {
+        const parsed = JSON.parse(saved) as FormState;
+        setForm({
+          ...parsed,
+          _stagedFile: null,
+          _initialImageUrl: parsed._initialImageUrl ?? "",
+          // blob: URLs don't survive page refreshes — clear them
+          image_url: (parsed.image_url ?? "").startsWith("blob:")
+            ? ""
+            : (parsed.image_url ?? ""),
+        });
+      }
     } catch {}
     setDraftReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,7 +182,15 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
   useEffect(() => {
     if (!draftReady || initial) return;
     try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(form));
+      // File objects aren't JSON-serializable; blob: URLs don't survive navigation
+      const { _stagedFile, ...draftable } = form;
+      sessionStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({
+          ...draftable,
+          image_url: draftable.image_url.startsWith("blob:") ? "" : draftable.image_url,
+        }),
+      );
     } catch {}
   }, [form, draftReady, initial]);
 
@@ -153,7 +199,7 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
   const visibleErrors = showAllErrors ? liveErrors : errors;
   const errorCount = Object.keys(liveErrors).length;
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const result = validatePopup(payload);
     if (!result.ok) {
@@ -163,16 +209,58 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
     }
     setSubmitting(true);
     try {
-      await onSubmit(payload);
+      let finalImageUrl: string | null = form.image_url.startsWith("blob:")
+        ? null
+        : form.image_url.trim() || null;
+
+      // 1. Upload the staged file now
+      if (form._stagedFile) {
+        const fd = new FormData();
+        fd.append("file", form._stagedFile);
+        const res = await fetch("/api/popups/upload-image", { method: "POST", body: fd });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => ({}));
+          throw new Error(
+            (detail as { detail?: string }).detail ?? `Upload failed (${res.status})`,
+          );
+        }
+        const { url } = (await res.json()) as { url: string };
+        if (form.image_url.startsWith("blob:")) URL.revokeObjectURL(form.image_url);
+        finalImageUrl = url;
+      }
+
+      // 2. Delete old managed image if swapped or removed
+      const isManaged = (u: string) =>
+        u.startsWith("https://") && u.includes("/release-popups/");
+      if (
+        form._initialImageUrl &&
+        form._initialImageUrl !== finalImageUrl &&
+        isManaged(form._initialImageUrl)
+      ) {
+        await deleteImage(form._initialImageUrl);
+      }
+
+      // 3. Submit with the real URL
+      const finalPayload: ReleasePopupCreate = { ...payload, image_url: finalImageUrl };
+      await onSubmit(finalPayload);
+
       if (!initial) {
         try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Save failed";
+      setErrors({ image_url: msg });
+      setShowAllErrors(false);
     } finally {
       setSubmitting(false);
     }
   }
 
   function handleCancel() {
+    // Revoke any staged blob URL so the browser can reclaim memory
+    if (form.image_url.startsWith("blob:")) {
+      URL.revokeObjectURL(form.image_url);
+    }
     if (!initial) {
       try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
     }
@@ -260,19 +348,66 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
 
       <Section title="Media" description="Optional image and where it sits in the popup.">
         <Field
-          label="Image URL"
-          htmlFor="f-image"
-          hint="Paste a publicly hosted image URL."
+          label="Image"
+          hint="Choose a file (JPG/PNG/WebP, ≤5 MB) or paste a public URL. Upload happens on Save."
           error={visibleErrors.image_url}
         >
-          <Input
-            id="f-image"
-            type="url"
-            value={form.image_url}
-            placeholder="https://…"
-            onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-            invalid={!!visibleErrors.image_url}
-          />
+          <div className="flex flex-col gap-3">
+            <ImageUploadInput
+              disabled={submitting}
+              onStaged={(file, blobUrl) => {
+                // Revoke previous blob if admin re-picks without saving
+                if (form.image_url.startsWith("blob:")) {
+                  URL.revokeObjectURL(form.image_url);
+                }
+                setForm({ ...form, image_url: blobUrl, _stagedFile: file });
+              }}
+            />
+
+            {/* URL paste — hidden while a blob is showing so the field isn't confusing */}
+            <Input
+              id="f-image"
+              type="url"
+              value={form.image_url.startsWith("blob:") ? "" : form.image_url}
+              placeholder="https://… (or choose a file above)"
+              onChange={(e) => {
+                if (form.image_url.startsWith("blob:")) {
+                  URL.revokeObjectURL(form.image_url);
+                }
+                setForm({ ...form, image_url: e.target.value, _stagedFile: null });
+              }}
+              invalid={!!visibleErrors.image_url}
+            />
+
+            {form.image_url ? (
+              <div className="relative w-40 h-24 rounded-md overflow-hidden border border-border bg-surface-2 group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={form.image_url}
+                  alt="preview"
+                  className="w-full h-full object-cover"
+                />
+                {form.image_url.startsWith("blob:") ? (
+                  <span className="absolute bottom-1 left-1 rounded px-1 py-0.5 text-[10px] font-medium bg-black/60 text-white leading-none">
+                    staged
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (form.image_url.startsWith("blob:")) {
+                      URL.revokeObjectURL(form.image_url);
+                    }
+                    setForm({ ...form, image_url: "", _stagedFile: null });
+                  }}
+                  className="absolute top-1 right-1 h-6 w-6 inline-flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Remove image"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ) : null}
+          </div>
         </Field>
 
         <Field label="Image position" hint="Where the image sits relative to the text.">
