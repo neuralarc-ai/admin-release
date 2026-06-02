@@ -2,13 +2,14 @@
 
 import { X, ImageIcon } from "lucide-react";
 import { MarkdownPreview } from "./MarkdownPreview";
-import type { ImagePosition } from "@/lib/types";
+import { BADGE_OPTIONS, type Badge, type ImagePosition } from "@/lib/types";
 
 export interface PopupPreviewProps {
   title: string;
   body: string;
   imageUrl: string;
   imagePosition: ImagePosition;
+  badge: Badge | null;
   ctaLabel: string;
   ctaUrl: string;
 }
@@ -18,6 +19,7 @@ export function PopupPreview({
   body,
   imageUrl,
   imagePosition,
+  badge,
   ctaLabel,
   ctaUrl,
 }: PopupPreviewProps) {
@@ -27,8 +29,15 @@ export function PopupPreview({
   // Mirror real ReleasePopup: top+image → portrait card (max-w-md), side → wide (max-w-3xl)
   const widthClass = hasImage && imagePosition === "top" ? "max-w-md" : "max-w-3xl";
 
+  const badgeLabel = badge ? BADGE_OPTIONS.find((o) => o.value === badge)?.label : null;
+
   const textBlock = (
     <div className={`p-8 flex flex-col gap-4 overflow-y-auto min-w-0 ${!hasImage ? "min-h-[280px]" : ""}`}>
+      {badgeLabel ? (
+        <span className="self-start rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-medium">
+          {badgeLabel}
+        </span>
+      ) : null}
       <h3
         className={`text-2xl font-semibold tracking-tight ${
           title ? "text-fg" : "text-fg-subtle italic"

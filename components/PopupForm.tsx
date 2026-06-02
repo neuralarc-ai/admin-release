@@ -9,8 +9,10 @@ import { Button } from "./ui/Button";
 import { PopupPreview } from "./PopupPreview";
 import {
   AUDIENCE_OPTIONS,
+  BADGE_OPTIONS,
   PLAN_TIERS,
   type Audience,
+  type Badge,
   type ImagePosition,
   type PlanTier,
   type ReleasePopup,
@@ -28,6 +30,7 @@ interface FormState {
   _stagedFile: File | null;  // file chosen but not yet uploaded; cleared on save/cancel/swap
   _initialImageUrl: string;  // image_url as loaded from DB — used to detect managed-image swaps
   image_position: ImagePosition;
+  badge: Badge | null;
   cta_label: string;
   cta_url: string;
   audience: Audience;
@@ -48,6 +51,7 @@ function emptyForm(): FormState {
     _stagedFile: null,
     _initialImageUrl: "",
     image_position: "left",
+    badge: null,
     cta_label: "",
     cta_url: "",
     audience: "all",
@@ -67,6 +71,7 @@ function fromPopup(p: ReleasePopup): FormState {
     _stagedFile: null,
     _initialImageUrl: p.image_url ?? "",
     image_position: p.image_position ?? "left",
+    badge: p.badge ?? null,
     cta_label: p.cta_label ?? "",
     cta_url: p.cta_url ?? "",
     audience: p.audience,
@@ -89,6 +94,7 @@ function toCreatePayload(form: FormState): ReleasePopupCreate {
     body: form.body,
     image_url: imageUrl,
     image_position: form.image_position,
+    badge: form.badge,
     cta_label: form.cta_label.trim() ? form.cta_label.trim() : null,
     cta_url: form.cta_url.trim() ? form.cta_url.trim() : null,
     audience: form.audience,
@@ -301,6 +307,7 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
           body={form.body}
           imageUrl={form.image_url}
           imagePosition={form.image_position}
+          badge={form.badge}
           ctaLabel={form.cta_label}
           ctaUrl={form.cta_url}
         />
@@ -309,6 +316,26 @@ export function PopupForm({ initial, submitLabel, onSubmit, onCancel }: PopupFor
       <div className="border-t border-border" />
 
       <Section title="Content" description="Title and body shown inside the popup.">
+        <Field
+          label="Badge"
+          htmlFor="f-badge"
+          hint="Optional tag shown above the title."
+        >
+          <select
+            id="f-badge"
+            value={form.badge ?? ""}
+            onChange={(e) =>
+              setForm({ ...form, badge: e.target.value === "" ? null : (e.target.value as Badge) })
+            }
+            className="h-9 px-3 rounded-md border border-border bg-surface-1 text-sm"
+          >
+            <option value="">— None —</option>
+            {BADGE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </Field>
+
         <Field
           label="Title"
           htmlFor="f-title"
